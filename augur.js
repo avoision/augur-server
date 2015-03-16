@@ -99,47 +99,70 @@ retrieveSearchPhrases = function(cb) {
 		_.pullAt(allSearchPhrasesArray, randomPos);
 		totalRandomSearches--;
 	};
-
 }
 
-
+// ===========================
+// Reset All Search Terms
+// ===========================
 resetAllSearchTerms = function() {
+	// We've exhausted the list!
+	// set all DB documents to status = "new"
+	// Start over and retrieve docs again
 	console.log('Reset all search terms!');
 }
 
+
+// ===========================
+// Update DB IDs
+// 
+// ===========================
+
+
+
+
+// ===========================
+// Update DB IDs
+// 
+// ===========================
+updateDBIDs = function(cb) {
+	// Create JSON, send to MongoDB
+	// update based on IDs in searchStrings Collection, mark status as "used"
+
+}
 
 
 // ===========================
 // Twitter Search
 // ===========================
-var phrase = "better";
-
-var urlEncodedPhrase = '%22' + phrase + '%22';
-var coinToss = Math.floor(Math.random() * 100) + 1;
-// var advicePref = 'recent';  // mixed, recent, popular
-
-if ((coinToss%4) != 0) {
-    var advicePref = 'recent';
-} else {
-    var advicePref = 'popular';
-};
-
-
-urlEncodedPhrase = '%22you%20will%22%20OR%20you%27ll%20OR%20he%27ll%20OR%20she%27ll%20OR%20they%27ll%20AND' + urlEncodedPhrase;
-
-
 getTweets = function(cb) {
+	// Grab first tweet from searchPhrasesArray
+	var urlEncodedPhrase = searchPhrasesArray[0] + "%20AND%20";
+
+	// Add in additional 2nd/3rd person POV phrases, forward looking. No RTs.
+	urlEncodedPhrase = '%22you%20will%22%20OR%20you%27ll%20OR%20he%27ll%20OR%20she%27ll%20OR%20they%27ll%20AND' + urlEncodedPhrase + '%20-RT';
+
+	// Remove from array
+	_.pullAt(searchPhrasesArray, 0);
+
+	// Randomize result type preference (mixed, recent, popular)
+	var coinToss = Math.floor(Math.random() * 100) + 1;
+	
+	if ((coinToss%4) != 0) {
+	    var resultTypePreference = 'recent';
+	} else {
+	    var resultTypePreference = 'popular';
+	};
+
     t.get('search/tweets', {
-    	q: urlEncodedPhrase + ' -RT', 
+    	q: urlEncodedPhrase,
     	count: 100, 
-    	result_type: advicePref, 
+    	result_type: resultTypePreference, 
     	lang: 'en',
     	include_entities: 'false'
     	}, 
     	
     	function(err, data, response) {
 		if (!err) {
-			// var pattern = new RegExp('\^' + phrase);
 
 			var botData = {
 				allPosts: [],
@@ -241,7 +264,8 @@ run = function() {
 	console.log("========= Starting! =========");
 
     async.waterfall([
-		retrieveSearchPhrases
+		retrieveSearchPhrases,
+		updateDBIDs
 		// getPublicTweet, 
 		// scrubResults
     ],
