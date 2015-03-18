@@ -38,17 +38,24 @@ var t = new Twit({
 
 
 
-var allSearchPhrasesArray = [],
-	searchPhrasesArray = [],
-	searchIDsArray = [];
+
 
 
 // ===========================
 // Get Search Phrases
 // ===========================
 retrieveSearchPhrases = function(cb) {
+	console.log('--------------------------- Retreieve search phrases ---------------------------');
 	// 15 for now, should be 150.
-	var totalRandomSearches = 15;
+	var totalRandomSearches = 5;
+
+	var visions = {
+		allVisionsArray: [],
+		tempVisionsArray: [],
+		allSearchPhrasesArray: [],
+		searchPhrasesArray: [],
+		searchIDsArray: []
+	};
 
 	// Placeholder. Retrieve from MongoDB
 	var searchPhrasesJSON = {
@@ -78,33 +85,37 @@ retrieveSearchPhrases = function(cb) {
 
 	// Convert to array
 	for (var i = 0; i < searchPhrasesJSON.phrases.length; i++) {
-		allSearchPhrasesArray.push(searchPhrasesJSON.phrases[i]);
+		visions.allSearchPhrasesArray.push(searchPhrasesJSON.phrases[i]);
 	};
 
 	// Do we have enough? If not, trigger resetAll function.
-	if (allSearchPhrasesArray.length < totalRandomSearches) {
+	if (visions.allSearchPhrasesArray.length < totalRandomSearches) {
 		resetAllSearchTerms();
 		return;
 	}
 
-	// Grab all the searches we need, at random.
-	while (totalRandomSearches.length > 0) {
-		var randomPos = Math.floor(Math.random() * allSearchPhrasesArray.length);
+	// Randomly grab the total number of searches we need.
+	while (totalRandomSearches > 0) {
+
+		var randomPos = Math.floor(Math.random() * visions.allSearchPhrasesArray.length);
 
 		// Store the phrases and IDs in their own arrays. We will update Mongo with this.
-		searchPhrasesArray.push(allSearchPhrasesArray[randomPos].searchTerm);
-		searchIDsArray.push(allSearchPhrasesArray[randomPos].id);
+		visions.searchPhrasesArray.push(visions.allSearchPhrasesArray[randomPos].searchTerm);
+		visions.searchIDsArray.push(visions.allSearchPhrasesArray[randomPos].id);
 
 		// Remove the document we just selected. Decrement counter.
-		_.pullAt(allSearchPhrasesArray, randomPos);
+		_.pullAt(visions.allSearchPhrasesArray, randomPos);
 		totalRandomSearches--;
 	};
+
+	cb(null, visions);
 }
 
 // ===========================
 // Reset All Search Terms
 // ===========================
 resetAllSearchTerms = function() {
+	console.log('--------------------------- Reset all search terms ---------------------------');
 	// We've exhausted the list!
 	// set all DB documents to status = "new"
 	// Start over and retrieve docs again
@@ -116,37 +127,33 @@ resetAllSearchTerms = function() {
 // Update DB IDs
 // 
 // ===========================
-
-
-
-
-// ===========================
-// Update DB IDs
-// 
-// ===========================
-updateDBIDs = function(cb) {
+updateDBIDs = function(visions, cb) {
+	console.log('--------------------------- Update database IDs ---------------------------');
 	// Create JSON, send to MongoDB
 	// update based on IDs in searchStrings Collection, mark status as "used"
 
+	cb(null, visions);
 }
 
 
 // ===========================
 // Twitter Search
 // ===========================
-getTweets = function(cb) {
-	// Grab first tweet from searchPhrasesArray
-	var urlEncodedPhrase = searchPhrasesArray[0] + "%20AND%20";
+getTweets = function(visions, cb) {
+	console.log('--------------------------- Get tweets ---------------------------');
+
+	// Grab first tweet from visions.searchPhrasesArray
+	var currentWord,
+		urlEncodedPhrase = visions.searchPhrasesArray[0] + "%20AND%20";
 
 	// Add in additional 2nd/3rd person POV phrases, forward looking. No RTs.
-	urlEncodedPhrase = '%22you%20will%22%20OR%20you%27ll%20OR%20he%27ll%20OR%20she%27ll%20OR%20they%27ll%20AND' + urlEncodedPhrase + '%20-RT';
+	urlEncodedPhrase = '%22you%20will%22%20OR%20you%27ll%20OR%20he%27ll%20OR%20she%27ll%20OR%20they%27ll%20AND%20' + urlEncodedPhrase + '-RT';
 
-	// Remove from array
-	_.pullAt(searchPhrasesArray, 0);
+	// Remove first element from array
+	visions.searchPhrasesArray.shift();
 
 	// Randomize result type preference (mixed, recent, popular)
 	var coinToss = Math.floor(Math.random() * 100) + 1;
-	
 	if ((coinToss%4) != 0) {
 	    var resultTypePreference = 'recent';
 	} else {
@@ -160,97 +167,94 @@ getTweets = function(cb) {
     	lang: 'en',
     	include_entities: 'false'
     	}, 
-    	
+
     	function(err, data, response) {
 		if (!err) {
-
-			var botData = {
-				allPosts: [],
-				allParsedTweets: []
-			};
-			
-			// Loop through all returned statues
+			// Loop through all returned statuses
 			for (var i = 0; i < data.statuses.length; i++) {
 
 				var tweet = data.statuses[i].text.toLowerCase();
 				// console.log(tweet);
-				// var hasReply = tweet.indexOf('@'), 
-				// 	hasHashtag = tweet.indexOf('#')
-				// 	hasLink = tweet.indexOf('http');
-				// 	hasAmp = tweet.indexOf('&');
 
 				// Does the tweet contain offensive words?
-				if (!wordfilter.blacklisted(tweet)) {
-					
-					botData.allPosts.push(data.statuses[i].text);
-
-					// Does the tweet match our pattern?
-					// if (pattern.test(tweet)) {
-					// 	botData.allPosts.push(data.statuses[i].text);
-
-					// 	// Does the tweet have a reply, hashtag, or URL?
-					// 	// if ((hasReply == -1) && (hasHashtag == -1) && (hasLink == -1) && (hasAmp == -1)) {
-					// 	// 	botData.allPosts.push(data.statuses[i].text);
-					// 	// }
-					// }
+				if (!wordfilter.blacklisted(tweet)) {			
+					// For now, all we want is the text.
+					// For future tracking of tweet info (author, time, geo), handle it here.
+					visions.tempVisionsArray.push(data.statuses[i].text);
 				}
 			}
 
-			if (botData.allPosts.length > 0 ) {
-				// Remove duplicates
-				botData.allPosts = _.uniq(botData.allPosts);
-
-
-       			cb(null, botData);
+			// Do we have any search phrases left to request?
+			if (visions.searchPhrasesArray.length > 0) {
+				getTweets(visions, cb);
 			} else {
-				cb("No tweets beginning with \'I just want...\'");
-			}
+				cb(null, visions);
+			};
 		} else {
-			cb("There was an error getting a public Tweet. Abandoning EVERYTHING :(");
+			cb("There was an error retrieving posts. The word is: " + currentWord);
 		}
     });
 };
 
 
-scrubResults = function(botData, cb) {
+scrubResults = function(visions, cb) {
+	console.log('--------------------------- Scrub results ---------------------------');
+
+	console.log(visions.tempVisionsArray.length);
+
 	var rejectionCriteriaArray = ['@', 'http', '#', '&', 'U+', 'i ', 'im ', 'i\'m', 'i\'ve ', 'ive ', 'i\'ll ', '. ill ', 'i\'d ', 'i\'da ', 'ida ', 'me ', 'my ', 'mine ', 'me', 'mine', 'lmao', 'lmfao', 'omg', 'omfg', 'smh', '&#', '%', ':)', ';)', ':p', 'oh:', 'tweet', 'we', 'we\'ll'];
 
 
-	console.log("Total tweets: " + botData.allPosts.length);
-
-	for (var i = 0; i < botData.allPosts.length; i++) {
-		var rejected = false;
-		for (var j = 0; j < rejectionCriteriaArray.length; j++) {
-			// If there's a match with item in rejectionCriteriaArray
-			if (botData.allPosts[i].toLowerCase().indexOf(rejectionCriteriaArray[j]) >= 0) {
-				rejected = true;
+	_.remove(visions.tempVisionsArray, function(n) {
+		for (var i = 0; i < rejectionCriteriaArray.length; i++) {
+			if (n.indexOf(rejectionCriteriaArray[i]) > -1) {
+				return true;
+				console.log(n);
 				break;
 			};
-		};
 
-		if (rejected) {
-			// Nothing
-		} else {
-			console.log("Passed!");
-			console.log('---------');
-			botData.allParsedTweets.push(botData.allPosts[i]);
 		}
-	}
+	});
 
-	if (botData.allParsedTweets.length > 0) {
-		cb(null, botData);
+	console.log(visions.tempVisionsArray.length);
+	console.log(visions.tempVisionsArray);
 
-		console.log("Result");
-		console.log("===========================");
+
+	// console.log("Total tweets: " + botData.allPosts.length);
+
+	// for (var i = 0; i < botData.allPosts.length; i++) {
+	// 	var rejected = false;
+	// 	for (var j = 0; j < rejectionCriteriaArray.length; j++) {
+	// 		// If there's a match with item in rejectionCriteriaArray
+	// 		if (botData.allPosts[i].toLowerCase().indexOf(rejectionCriteriaArray[j]) >= 0) {
+	// 			rejected = true;
+	// 			break;
+	// 		};
+	// 	};
+
+	// 	if (rejected) {
+	// 		// Nothing
+	// 	} else {
+	// 		console.log("Passed!");
+	// 		console.log('---------');
+	// 		botData.allParsedTweets.push(botData.allPosts[i]);
+	// 	}
+	// }
+
+	// if (botData.allParsedTweets.length > 0) {
+	// 	cb(null, botData);
+
+	// 	console.log("Result");
+	// 	console.log("===========================");
 		
-		for (var i = 0; i < botData.allParsedTweets.length; i++) {
-			console.log("> " + botData.allParsedTweets[i]);
-		};
+	// 	for (var i = 0; i < botData.allParsedTweets.length; i++) {
+	// 		console.log("> " + botData.allParsedTweets[i]);
+	// 	};
 
-	} else {
-		console.log("No tweets found");
-		cb("No tweets beginning with \'I just want...\'");
-	}
+	// } else {
+	// 	console.log("No tweets found");
+	// 	cb("No tweets beginning with \'I just want...\'");
+	// }
 }
 
 
@@ -261,13 +265,13 @@ scrubResults = function(botData, cb) {
 // Execute
 // ===========================
 run = function() {
-	console.log("========= Starting! =========");
+	console.log('--------------------------- Starting ---------------------------');
 
     async.waterfall([
 		retrieveSearchPhrases,
-		updateDBIDs
-		// getPublicTweet, 
-		// scrubResults
+		updateDBIDs,
+		getTweets,
+		scrubResults
     ],
     function(err, botData) {
 		if (err) {
