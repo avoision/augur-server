@@ -1,8 +1,4 @@
-
 // var Client        = require('node-rest-client').Client;
-
-
-// var wordfilter    = require('wordfilter');
 // var request       = require('request');
 
 var _             	= require('lodash');
@@ -10,6 +6,7 @@ var Twit          	= require('twit');
 var async         	= require('async');
 var mongojs 		= require('mongojs');
 var wordfilter    	= require('wordfilter');
+var levenshtein 	= require('fast-levenshtein');
 
 var t = new Twit({
     consumer_key:         	process.env.AUGURAPP_TWIT_CONSUMER_KEY,
@@ -204,10 +201,12 @@ scrubResults = function(visions, cb) {
 
 	var rejectionCriteriaArray = ['@', 'http', '#', '&', 'U+', 'i ', 'im ', 'i\'m', 'i\'ve ', 'ive ', 'i\'ll ', '. ill ', 'i\'d ', 'i\'da ', 'ida ', 'me ', 'my ', 'mine ', 'me', 'mine', 'lmao', 'lmfao', 'omg', 'omfg', 'smh', '&#', '%', ':)', ';)', ':p', 'oh:', 'tweet', 'we', 'we\'ll'];
 
+	visions.tempVisionsArray = _.uniq(visions.tempVisionsArray);
 
 	_.remove(visions.tempVisionsArray, function(n) {
 		for (var i = 0; i < rejectionCriteriaArray.length; i++) {
-			if (n.indexOf(rejectionCriteriaArray[i]) > -1) {
+			n = n.replace('\\\'', '\'');
+			if (n.toLowerCase().indexOf(rejectionCriteriaArray[i]) > -1) {
 				return true;
 				console.log(n);
 				break;
@@ -215,6 +214,14 @@ scrubResults = function(visions, cb) {
 
 		}
 	});
+
+	// Iterate through temp array
+	// Check if allVisionsArray has any data
+	// If yes... 
+	// 	and also iterate through allVisionsArray
+	// 	check for Levenshtein distance
+
+	// If no... add item.
 
 	console.log(visions.tempVisionsArray.length);
 	console.log(visions.tempVisionsArray);
