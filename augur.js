@@ -43,18 +43,21 @@ var t = new Twit({
 // ===========================
 retrieveSearchPhrases = function(cb) {
 	console.log('--------------------------- Retreieve search phrases ---------------------------');
-	// 15 for now, should be 150.
-	var totalRandomSearches = 5;
+	// Low for now, should be ~150.
+	var totalRandomSearches = 10,		// Keep polling Twitter for X number of search phrases
+		maxArraySize = 750,				// When allVisionsArray reaches this size, push to Mongo before clearing/resuming.
+		levenshteinThreshold = 25;		// Levenshtein threshold, to avoid similar strings.
 
 	var visions = {
-		allVisionsArray: [],
-		tempVisionsArray: [],
-		allSearchPhrasesArray: [],
-		searchPhrasesArray: [],
-		searchIDsArray: []
+		allVisionsArray: [],		// List of visions, before uploading to Mongo
+		tempVisionsArray: [],		// Placeholder array, for parsing
+		allSearchPhrasesArray: [],	// Full list of search phrase data from Mongo
+		searchPhrasesArray: [],		// Just the phrases, randomly selected from allSearchPhrasesArray
+		searchIDsArray: []			// Just the Mongo IDs
 	};
 
-	// Placeholder. Retrieve from MongoDB
+	// Placeholder. Query data from MongoDB
+	// Consider: searchPhrasesArray, searchIDsArray - unnecessary?
 	var searchPhrasesJSON = {
 		"phrases" : [
 			{ "searchTerm": "abandon", id: "100" },
@@ -197,7 +200,7 @@ getTweets = function(visions, cb) {
 scrubResults = function(visions, cb) {
 	console.log('--------------------------- Scrub results ---------------------------');
 
-	console.log(visions.tempVisionsArray.length);
+	console.log("Before: " + visions.tempVisionsArray.length);
 
 	var rejectionCriteriaArray = ['@', 'http', '#', '&', 'U+', 'i ', 'im ', 'i\'m', 'i\'ve ', 'ive ', 'i\'ll ', '. ill ', 'i\'d ', 'i\'da ', 'ida ', 'me ', 'my ', 'mine ', 'me', 'mine', 'lmao', 'lmfao', 'omg', 'omfg', 'smh', '&#', '%', ':)', ';)', ':p', 'oh:', 'tweet', 'we', 'we\'ll'];
 
@@ -215,16 +218,38 @@ scrubResults = function(visions, cb) {
 		}
 	});
 
+	console.log("After: " + visions.tempVisionsArray.length);
+
 	// Iterate through temp array
-	// Check if allVisionsArray has any data
+	for (var i = 0; i < visions.tempVisionsArray.length; i++) {
+		// Check if allVisionsArray has any data
+		if (visions.allVisionsArray.length > 0) {
+			for (var j = 0; j < visions.allVisionsArray.length; j++) {
+				var distance = levenshtein.get(visions.tempVisionsArray[i].toLowerCase(), visions.allVisionsArray[j].toLowerCase());
+				// If we find a too-similar match, exit out
+				if (distance < visions.levenshteinThreshold) {
+					console.log("Applicant: " + visions.tempVisionsArray[i]);
+					console.log("Existing: " + visions.allVisionsArray[j]);
+					break; 
+				}
+			};
+			// If we make it here, we have new content. Add.
+			visions.allVisionsArray.push(visions.tempVisionsArray[i]);
+		} else {
+			visions.allVisionsArray.push(visions.tempVisionsArray[i])
+		};
+	};
+
+	console.log(visions.allVisionsArray);
+
 	// If yes... 
 	// 	and also iterate through allVisionsArray
 	// 	check for Levenshtein distance
 
 	// If no... add item.
 
-	console.log(visions.tempVisionsArray.length);
-	console.log(visions.tempVisionsArray);
+	
+	
 
 
 	// console.log("Total tweets: " + botData.allPosts.length);
