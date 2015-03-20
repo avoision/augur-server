@@ -92,18 +92,20 @@ retrieveSearchPhrases = function(cb) {
 			return;
 		}
 
+		// Randomize the array
+		visions.allSearchPhrasesArray = _.shuffle(visions.allSearchPhrasesArray);
+
 		// Randomly grab the total number of searches we need.
 		while (visions.totalRandomSearches > 0) {
 			console.log("visions.totalRandomSearches: " + visions.totalRandomSearches);
 			
-			var randomPos = Math.floor(Math.random() * visions.allSearchPhrasesArray.length);
-
 			// Store the phrases and IDs in their own arrays. We will update Mongo with this.
-			visions.searchPhrasesArray.push(visions.allSearchPhrasesArray[randomPos].searchTerm);
-			visions.searchIDsArray.push(visions.allSearchPhrasesArray[randomPos].id);
+			visions.searchPhrasesArray.push(visions.allSearchPhrasesArray[0].searchTerm);
+			visions.searchIDsArray.push(visions.allSearchPhrasesArray[0].id);
 
 			// Remove the document we just selected. Decrement counter.
-			_.pullAt(visions.allSearchPhrasesArray, randomPos);
+			// _.pullAt(visions.allSearchPhrasesArray, randomPos);
+			visions.allSearchPhrasesArray.shift();
 			visions.totalRandomSearches--;
 		};
 
