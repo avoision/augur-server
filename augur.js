@@ -19,8 +19,10 @@ var t = new Twit({
 // AWS.config.accessKeyId = process.env.AUGURAPP_AWS_KEY;
 // AWS.config.secretAccessKey = process.env.AUGURAPP_AWS_SECRET;
 
-// var mongoUser = process.env.AUGURAPP_MONGODB_USER,
-// 	monogoPass = process.env.AUGURAPP_MONGODB_PASS;
+var mongoUser = process.env.AUGURAPP_MONGODB_USER,
+	mongoPass = process.env.AUGURAPP_MONGODB_PASS,
+	mongoURI = "mongodb://" + mongoUser + ":" + mongoPass + "@ds061747.mongolab.com:61747/augur-db";
+
 
 // var uri = "mongodb://mongoUser:monogoPass@ds061747.mongolab.com:61747/augur-db",
 //     db = mongojs.connect(uri);
@@ -43,72 +45,102 @@ var t = new Twit({
 // ===========================
 retrieveSearchPhrases = function(cb) {
 	console.log('--------------------------- Retreieve search phrases ---------------------------');
-	// Low for now, should be ~150.
-	var totalRandomSearches = 10,		// Keep polling Twitter for X number of search phrases
-		maxArraySize = 750,				// When allVisionsArray reaches this size, push to Mongo before clearing/resuming.
-		levenshteinThreshold = 25;		// Levenshtein threshold, to avoid similar strings.
 
 	var visions = {
-		allVisionsArray: [],		// List of visions, before uploading to Mongo
-		tempVisionsArray: [],		// Placeholder array, for parsing
-		allSearchPhrasesArray: [],	// Full list of search phrase data from Mongo
-		searchPhrasesArray: [],		// Just the phrases, randomly selected from allSearchPhrasesArray
-		searchIDsArray: []			// Just the Mongo IDs
+		totalRandomSearches: 3,			// Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
+		maxArraySize: 750,				// When allVisionsArray reaches this size, push to Mongo before clearing/resuming.
+		levenshteinThreshold: 25,		// Levenshtein threshold, to avoid similar strings.
+		allVisionsArray: [],			// List of visions, before uploading to Mongo
+		tempVisionsArray: [],			// Placeholder array, for parsing
+		allSearchPhrasesArray: [],		// Full list of search phrase data from Mongo
+		searchPhrasesArray: [],			// Just the phrases, randomly selected from allSearchPhrasesArray
+		searchIDsArray: []				// Just the Mongo IDs
 	};
 
-	// Placeholder. Query data from MongoDB
+	// Mongo: Query data from searchStrings collection
 	// Consider: searchPhrasesArray, searchIDsArray - unnecessary?
-	var searchPhrasesJSON = {
-		"phrases" : [
-			{ "searchTerm": "abandon", id: "100" },
-			{ "searchTerm": "ability", id: "101" },
-			{ "searchTerm": "about", id: "102" },
-			{ "searchTerm": "above", id: "103" },
-			{ "searchTerm": "absence", id: "104" },
-			{ "searchTerm": "absent", id: "105" },
-			{ "searchTerm": "absolutely", id: "106" },
-			{ "searchTerm": "abuse", id: "107" },
-			{ "searchTerm": "accept", id: "108" },
-			{ "searchTerm": "accident", id: "109" },
-			{ "searchTerm": "according", id: "110" },
-			{ "searchTerm": "accurate", id: "111" },
-			{ "searchTerm": "accuse", id: "112" },
-			{ "searchTerm": "achieve", id: "113" },
-			{ "searchTerm": "achievement", id: "114" },
-			{ "searchTerm": "acquire", id: "115" },
-			{ "searchTerm": "across", id: "116" },
-			{ "searchTerm": "action", id: "117" },
-			{ "searchTerm": "adjust", id: "118" },
-			{ "searchTerm": "admire", id: "119" }
-		]
-	}; 
+	var db = mongojs(mongoURI),
+		searchStringsDBC = db.collection('searchStrings'),
+		searchPhrasesJSON = {};
+	
+		searchStringsDBC.find({ status: "new" }).limit(5, 
+			function(err, docs) {
+				if (!err) {
+					console.log("Mongo: searchStrings docs retrieved!");
+					searchPhrasesJSON = docs;
+					processSearchStrings();
+					db.close();
+				} else {
+					console.log("Error retrieving data from searchStrings Collection");
+				}
+			}
+		);
 
-	// Convert to array
-	for (var i = 0; i < searchPhrasesJSON.phrases.length; i++) {
-		visions.allSearchPhrasesArray.push(searchPhrasesJSON.phrases[i]);
-	};
+	
+	processSearchStrings = function() {
+		console.log('--------- Process search strings ---------');
 
-	// Do we have enough? If not, trigger resetAll function.
-	if (visions.allSearchPhrasesArray.length < totalRandomSearches) {
-		resetAllSearchTerms();
-		return;
+		// Convert to array
+		for (var i = 0; i < searchPhrasesJSON.length; i++) {
+			visions.allSearchPhrasesArray.push(searchPhrasesJSON[i]);
+		};
+
+		// Do we have enough? If not, trigger resetAll function.
+		// Insert fake values here to force/test reset.
+		if (visions.allSearchPhrasesArray.length < visions.totalRandomSearches) {
+			resetAllSearchTerms();
+			return;
+		}
+
+		// Randomly grab the total number of searches we need.
+		while (visions.totalRandomSearches > 0) {
+			console.log("visions.totalRandomSearches: " + visions.totalRandomSearches);
+			
+			var randomPos = Math.floor(Math.random() * visions.allSearchPhrasesArray.length);
+
+			// Store the phrases and IDs in their own arrays. We will update Mongo with this.
+			visions.searchPhrasesArray.push(visions.allSearchPhrasesArray[randomPos].searchTerm);
+			visions.searchIDsArray.push(visions.allSearchPhrasesArray[randomPos].id);
+
+			// Remove the document we just selected. Decrement counter.
+			_.pullAt(visions.allSearchPhrasesArray, randomPos);
+			visions.totalRandomSearches--;
+		};
+
+		console.log('arrived here');
+
+		cb(null, visions);
 	}
 
-	// Randomly grab the total number of searches we need.
-	while (totalRandomSearches > 0) {
+	
+	
+	// var searchPhrasesJSON = {
+	// 	"phrases" : [
+	// 		{ "searchTerm": "abandon", id: "100" },
+	// 		{ "searchTerm": "ability", id: "101" },
+	// 		{ "searchTerm": "about", id: "102" },
+	// 		{ "searchTerm": "above", id: "103" },
+	// 		{ "searchTerm": "absence", id: "104" },
+	// 		{ "searchTerm": "absent", id: "105" },
+	// 		{ "searchTerm": "absolutely", id: "106" },
+	// 		{ "searchTerm": "abuse", id: "107" },
+	// 		{ "searchTerm": "accept", id: "108" },
+	// 		{ "searchTerm": "accident", id: "109" },
+	// 		{ "searchTerm": "according", id: "110" },
+	// 		{ "searchTerm": "accurate", id: "111" },
+	// 		{ "searchTerm": "accuse", id: "112" },
+	// 		{ "searchTerm": "achieve", id: "113" },
+	// 		{ "searchTerm": "achievement", id: "114" },
+	// 		{ "searchTerm": "acquire", id: "115" },
+	// 		{ "searchTerm": "across", id: "116" },
+	// 		{ "searchTerm": "action", id: "117" },
+	// 		{ "searchTerm": "adjust", id: "118" },
+	// 		{ "searchTerm": "admire", id: "119" }
+	// 	]
+	// }; 
 
-		var randomPos = Math.floor(Math.random() * visions.allSearchPhrasesArray.length);
 
-		// Store the phrases and IDs in their own arrays. We will update Mongo with this.
-		visions.searchPhrasesArray.push(visions.allSearchPhrasesArray[randomPos].searchTerm);
-		visions.searchIDsArray.push(visions.allSearchPhrasesArray[randomPos].id);
 
-		// Remove the document we just selected. Decrement counter.
-		_.pullAt(visions.allSearchPhrasesArray, randomPos);
-		totalRandomSearches--;
-	};
-
-	cb(null, visions);
 }
 
 // ===========================
@@ -143,11 +175,15 @@ getTweets = function(visions, cb) {
 	console.log('--------------------------- Get tweets ---------------------------');
 
 	// Grab first tweet from visions.searchPhrasesArray
-	var currentWord,
+	var currentWord = visions.searchPhrasesArray[0],
 		urlEncodedPhrase = visions.searchPhrasesArray[0] + "%20AND%20";
 
+	console.log("currentWord: " + currentWord);
+
 	// Add in additional 2nd/3rd person POV phrases, forward looking. No RTs.
-	urlEncodedPhrase = '%22you%20will%22%20OR%20you%27ll%20OR%20he%27ll%20OR%20she%27ll%20OR%20they%27ll%20AND%20' + urlEncodedPhrase + '-RT';
+	// urlEncodedPhrase = '%22you%20will%22%20OR%20you%27ll%20OR%20he%27ll%20OR%20she%27ll%20OR%20they%27ll%20AND%20' + urlEncodedPhrase + '-RT';
+
+	urlEncodedPhrase = '%22you%20will%22OR%22you%27ll%22OR%22you%20should%22OR%22you%20may%22OR%22you%20might%22OR%22you%27d%20better%22OR%22you%20ought%20to%22' + urlEncodedPhrase + '-RT';
 
 	// Remove first element from array
 	visions.searchPhrasesArray.shift();
@@ -172,10 +208,7 @@ getTweets = function(visions, cb) {
 		if (!err) {
 			// Loop through all returned statuses
 			for (var i = 0; i < data.statuses.length; i++) {
-
 				var tweet = data.statuses[i].text.toLowerCase();
-				// console.log(tweet);
-
 				// Does the tweet contain offensive words?
 				if (!wordfilter.blacklisted(tweet)) {			
 					// For now, all we want is the text.
@@ -183,13 +216,7 @@ getTweets = function(visions, cb) {
 					visions.tempVisionsArray.push(data.statuses[i].text);
 				}
 			}
-
-			// Do we have any search phrases left to request?
-			if (visions.searchPhrasesArray.length > 0) {
-				getTweets(visions, cb);
-			} else {
-				cb(null, visions);
-			};
+			scrubResults(visions, cb);
 		} else {
 			cb("There was an error retrieving posts. The word is: " + currentWord);
 		}
@@ -224,70 +251,95 @@ scrubResults = function(visions, cb) {
 	for (var i = 0; i < visions.tempVisionsArray.length; i++) {
 		// Check if allVisionsArray has any data
 		if (visions.allVisionsArray.length > 0) {
+			var isOriginal = true;
 			for (var j = 0; j < visions.allVisionsArray.length; j++) {
 				var distance = levenshtein.get(visions.tempVisionsArray[i].toLowerCase(), visions.allVisionsArray[j].toLowerCase());
 				// If we find a too-similar match, exit out
 				if (distance < visions.levenshteinThreshold) {
 					console.log("Applicant: " + visions.tempVisionsArray[i]);
 					console.log("Existing: " + visions.allVisionsArray[j]);
+					isOriginal = false;
 					break; 
 				}
 			};
-			// If we make it here, we have new content. Add.
-			visions.allVisionsArray.push(visions.tempVisionsArray[i]);
+			// Original? Add.
+			if (isOriginal) {
+				visions.allVisionsArray.push(visions.tempVisionsArray[i]);
+			}
 		} else {
 			visions.allVisionsArray.push(visions.tempVisionsArray[i])
 		};
 	};
 
-	console.log(visions.allVisionsArray);
-
-	// If yes... 
-	// 	and also iterate through allVisionsArray
-	// 	check for Levenshtein distance
-
-	// If no... add item.
-
-	
-	
-
-
-	// console.log("Total tweets: " + botData.allPosts.length);
-
-	// for (var i = 0; i < botData.allPosts.length; i++) {
-	// 	var rejected = false;
-	// 	for (var j = 0; j < rejectionCriteriaArray.length; j++) {
-	// 		// If there's a match with item in rejectionCriteriaArray
-	// 		if (botData.allPosts[i].toLowerCase().indexOf(rejectionCriteriaArray[j]) >= 0) {
-	// 			rejected = true;
-	// 			break;
-	// 		};
-	// 	};
-
-	// 	if (rejected) {
-	// 		// Nothing
-	// 	} else {
-	// 		console.log("Passed!");
-	// 		console.log('---------');
-	// 		botData.allParsedTweets.push(botData.allPosts[i]);
-	// 	}
-	// }
-
-	// if (botData.allParsedTweets.length > 0) {
-	// 	cb(null, botData);
-
-	// 	console.log("Result");
-	// 	console.log("===========================");
-		
-	// 	for (var i = 0; i < botData.allParsedTweets.length; i++) {
-	// 		console.log("> " + botData.allParsedTweets[i]);
-	// 	};
-
-	// } else {
-	// 	console.log("No tweets found");
-	// 	cb("No tweets beginning with \'I just want...\'");
-	// }
+	arrayCheckReset(visions, cb);
 }
+
+
+arrayCheckReset = function(visions, cb) {
+	console.log('--------------------------- Array Check/Reset ---------------------------');
+
+	// Is our array too large? 
+	if (visions.allVisionsArray.length < visions.maxArraySize) {
+		if (visions.searchPhrasesArray.length > 0) {
+			// Clear tempVisionsArray.
+			visions.tempVisionsArray = [];
+			getTweets(visions, cb);
+		} else {
+			cb(null, visions);
+		};
+	// It's too large. Let's push content up to our MongoDB.
+	} else {
+		// Upload data to Mongo
+		// Reset vars
+
+		// on success, 
+		// getTweets(visions, cb);
+	}
+}
+
+
+testFunction = function(visions, cb) {
+	console.log('--------------------------- Test Function ---------------------------');
+	
+	for (var i = 0; i < visions.allVisionsArray.length; i++) {
+		console.log(visions.allVisionsArray[i]);
+	};
+}
+
+
+
+
+
+
+// ===========================
+// Mongo Testing
+// ===========================
+mongoTest = function() {
+	// Connect to DB
+	var db = mongojs(mongoURI),
+		searchStringsDBC = db.collection('searchStrings'),
+		searchPhrasesJSON = {};
+	
+		searchStringsDBC.find({ status: "new" }).limit(5, 
+			function(err, docs) {
+				if (!err) {
+					console.log("Mongo: searchStrings docs retrieved!");
+					// console.log(JSON.stringify(docs));
+					var bob = docs;
+					console.log(typeof bob);
+					console.log(bob);
+
+					db.close();
+
+
+				} else {
+					console.log("Error retrieving data from searchStrings Collection");
+				}
+			}
+		);
+}
+
+
 
 
 
@@ -303,7 +355,9 @@ run = function() {
 		retrieveSearchPhrases,
 		updateDBIDs,
 		getTweets,
-		scrubResults
+		// scrubResults,
+		testFunction		
+
     ],
     function(err, botData) {
 		if (err) {
@@ -313,6 +367,8 @@ run = function() {
 }
 
 run();
+
+// mongoTest();
 
 
 
