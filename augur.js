@@ -18,7 +18,29 @@ var mongoUser = process.env.AUGURAPP_MONGODB_USER,
 
 var db = mongojs(mongoURI),
 	searchStringsDBC = db.collection('searchStrings'),
-	twitterStorageDBC = db.collection('twitterStorage');
+	twitterStorageDBC = db.collection('twitterStorage'),
+	twitterVisionsDBC = db.collection('twitterVisions');
+
+/*
+Levenshtein note: 
+
+Current setup (threshold: 25) results in the following two strings being considered as "too similar" - 
+
+	StringA: You will wish you hadn't.
+	StringB: girl, you'll be a woman soon
+
+---------
+Rather than an arbitrary number (example: 25), consider a dynamic levenshtein threshold.
+
+StringA  |  StringB
+
+1) Determine which is longer
+2) Set levenshtein threshold to 75% of longer string length
+3) Determine Levenshtein distance
+3) If distance < threshold, do not add in StringA
+
+*/
+
 
 // ===========================
 // Init
@@ -27,8 +49,8 @@ augurInit = function(cb) {
 	
 	// Consider: searchPhrasesArray, searchIDsArray - unnecessary?
 	var visions = {
-		totalRandomSearches: 3,			// Counter. Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
-		maxArraySize: 30,				// When allVisionsArray reaches this size, push to Mongo before clearing/resuming.
+		totalRandomSearches: 30,		// Counter. Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
+		maxArraySize: 500,				// When allVisionsArray reaches this size, push to Mongo before clearing/resuming.
 		levenshteinThreshold: 25,		// Levenshtein distance, to avoid similar strings.
 		allVisionsArray: [],			// List of visions, before uploading to Mongo
 		tempVisionsArray: [],			// Placeholder array, for parsing
@@ -39,15 +61,6 @@ augurInit = function(cb) {
 
 	cb(null, visions);
 }
-
-
-// resetVisions = function(visions) {
-// 	visions.totalRandomSearches = 5;
-// 	visions.tempVisionsArray = [];
-// 	visions.searchPhrasesArray = [];
-// 	visions.searchIDsArray = [];
-// }
-
 
 // ===========================
 // Get Search Phrases
@@ -84,8 +97,7 @@ processSearchStrings = function(visions, searchPhrasesJSON, cb) {
 
 	// Do we have enough? If not, trigger resetAll function.
 	// Insert fake values here to force/test reset.
-	// if (visions.allSearchPhrasesArray.length < visions.totalRandomSearches) {
-	if (visions.allSearchPhrasesArray.length < 1300) {
+	if (visions.allSearchPhrasesArray.length < visions.totalRandomSearches) {
 		console.log("Not enough left. Time to reset!");
 		resetAllSearchTerms(visions);
 		return;
@@ -303,6 +315,7 @@ phraseCheckReset = function(visions, cb) {
 	// Do we have more phrases to search through? If so...
 	if (visions.searchPhrasesArray.length > 0) {
 		console.log("Go get some more");
+		visions.tempVisionsArray = [];
 		getTweets(visions, cb);
 
 	// We're done! Push what remains...
@@ -346,50 +359,54 @@ getAllFinalTweets = function(visions, cb) {
 finalPassClean = function(visions, visionsPrepJSON, cb) {
 	console.log('--------------------------- FinalPass Clean ---------------------------');
 	
-	console.log("BEFORE visionsPrepJSON.length: " + visionsPrepJSON.length);
+	console.log("BEFORE, Prep: " + visionsPrepJSON.length);
 
 	// Levenshtein it up!
+	var visionsFinal = [];
 
-	// for (var i = (visionsPrepJSON.length - 1); i > 0; i--) {
-	// 	for (var j = (visionsPrepJSON.length - 2); j > 0; j--) {
-	// 		var applicant = visionsPrepJSON[i].tweet,
-	// 			existing = visionsPrepJSON[j].tweet;
+	for (var i = 0; i < visionsPrepJSON.length; i++) {
+		if (visionsFinal.length > 0) {
+			var isOriginal = true;
 
-	// 			console.log("Applicant: " + applicant);
-	// 			console.log("Existing: " + existing);
+			for (var j = 0; j < visionsFinal.length; j++) {
+				var distance = levenshtein.get(visionsPrepJSON[i].tweet.toLowerCase(), visionsFinal[j].tweet.toLowerCase());
 
-	// 		var distance = levenshtein.get(applicant.toLowerCase(), existing.toLowerCase());
+				// If we find a too-similar match, exit out
+				if (distance < visions.levenshteinThreshold) {
+					console.log("Applicant: " + visionsPrepJSON[i].tweet);
+					console.log("Existing: " + visionsFinal[j].tweet);
+					isOriginal = false;
+					break; 
+				}
+			}
 
-	// 		if (distance < visions.levenshteinThreshold) {
-	// 			console.log('found one');
-	// 			// console.log("Applicant: " + applicant);
-	// 			// console.log("Existing: " + existing);
-				
-	// 			visionsPrepJSON.splice(i, 1);
-				
-	// 			break; 
-	// 		}
-	// 	}
-	// 	console.log(i);
-	// }
+			// Original? Add.
+			if (isOriginal) {
+				visionsFinal.push(visionsPrepJSON[i]);
+			}
+		} else {
+			visionsFinal.push(visionsPrepJSON[i]);
+		}
+	}
 
-	console.log("AFTER visionsPrepJSON.length: " + visionsPrepJSON.length);
+	console.log("AFTER, Final: " + visionsFinal.length);
 
-	cb(null, visionsPrepJSON);
+	cb(null, visionsFinal);
 }
 
 
-finalUploadRename = function(visionsPrepJSON, cb) {
+finalUploadRename = function(visionsFinal, cb) {
 	console.log('--------------------------- Final upload and rename ---------------------------');
 
-	// Remove all documents from twitterStorageDBC
-	twitterStorageDBC.remove({}, function() {
+// >>>>> Blank out visionsFinal
+// >>>>> Then replace with...
 
-		// Upload remaining to MongoDB
-		twitterStorageDBC.insert(visionsPrepJSON, function() {
-			twitterStorageDBC.renameCollection("twitterVisions", true, function() {
-				cb(null, visions);			
-			})
+	// Upload final visions content to MongoDB
+	twitterVisionsDBC.insert(visionsFinal, function() {
+
+		// When done, blank out the storage collection
+		twitterStorageDBC.remove({}, function() {
+			cb(null);
 		});
 	});
 }
@@ -479,6 +496,7 @@ searchBegin = function() {
 		// scrubResults,
 		getAllFinalTweets,
 		finalPassClean,
+		finalUploadRename,
 		endOfLine
     ],
     function(err, botData) {
