@@ -1,6 +1,3 @@
-// var Client        = require('node-rest-client').Client;
-// var request       = require('request');
-
 var _             	= require('lodash');
 var Twit          	= require('twit');
 var async         	= require('async');
@@ -15,41 +12,24 @@ var t = new Twit({
     access_token_secret:  	process.env.AUGURAPP_TWIT_ACCESS_TOKEN_SECRET
 });
 
-// var AWS = require('aws-sdk');
-// AWS.config.accessKeyId = process.env.AUGURAPP_AWS_KEY;
-// AWS.config.secretAccessKey = process.env.AUGURAPP_AWS_SECRET;
-
 var mongoUser = process.env.AUGURAPP_MONGODB_USER,
 	mongoPass = process.env.AUGURAPP_MONGODB_PASS,
 	mongoURI = "mongodb://" + mongoUser + ":" + mongoPass + "@ds061747.mongolab.com:61747/augur-db";
 
-
-// var uri = "mongodb://mongoUser:monogoPass@ds061747.mongolab.com:61747/augur-db",
-//     db = mongojs.connect(uri);
-
-// db.on('error',function(err) {
-//     console.log('database error', err);
-// });
- 
-// db.on('ready',function() {
-//     console.log('database connected');
-// });
-
-
-
-
-
+var db = mongojs(mongoURI),
+	searchStringsDBC = db.collection('searchStrings'),
+	twitterStorageDBC = db.collection('twitterStorage');
 
 // ===========================
-// Get Search Phrases
+// Init
 // ===========================
-retrieveSearchPhrases = function(cb) {
-	console.log('--------------------------- Retreieve search phrases ---------------------------');
-
+augurInit = function(cb) {
+	
+	// Consider: searchPhrasesArray, searchIDsArray - unnecessary?
 	var visions = {
-		totalRandomSearches: 3,			// Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
-		maxArraySize: 750,				// When allVisionsArray reaches this size, push to Mongo before clearing/resuming.
-		levenshteinThreshold: 25,		// Levenshtein threshold, to avoid similar strings.
+		totalRandomSearches: 3,			// Counter. Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
+		maxArraySize: 30,				// When allVisionsArray reaches this size, push to Mongo before clearing/resuming.
+		levenshteinThreshold: 25,		// Levenshtein distance, to avoid similar strings.
 		allVisionsArray: [],			// List of visions, before uploading to Mongo
 		tempVisionsArray: [],			// Placeholder array, for parsing
 		allSearchPhrasesArray: [],		// Full list of search phrase data from Mongo
@@ -57,116 +37,128 @@ retrieveSearchPhrases = function(cb) {
 		searchIDsArray: []				// Just the Mongo IDs
 	};
 
-	// Mongo: Query data from searchStrings collection
-	// Consider: searchPhrasesArray, searchIDsArray - unnecessary?
-	var db = mongojs(mongoURI),
-		searchStringsDBC = db.collection('searchStrings'),
-		searchPhrasesJSON = {};
-	
-		searchStringsDBC.find({ status: "new" }).limit(5, 
-			function(err, docs) {
-				if (!err) {
-					console.log("Mongo: searchStrings docs retrieved!");
-					searchPhrasesJSON = docs;
-					processSearchStrings();
-					db.close();
-				} else {
-					console.log("Error retrieving data from searchStrings Collection");
-				}
-			}
-		);
-
-	
-	processSearchStrings = function() {
-		console.log('--------- Process search strings ---------');
-
-		// Convert to array
-		for (var i = 0; i < searchPhrasesJSON.length; i++) {
-			visions.allSearchPhrasesArray.push(searchPhrasesJSON[i]);
-		};
-
-		// Do we have enough? If not, trigger resetAll function.
-		// Insert fake values here to force/test reset.
-		if (visions.allSearchPhrasesArray.length < visions.totalRandomSearches) {
-			resetAllSearchTerms();
-			return;
-		}
-
-		// Randomize the array
-		visions.allSearchPhrasesArray = _.shuffle(visions.allSearchPhrasesArray);
-
-		// Randomly grab the total number of searches we need.
-		while (visions.totalRandomSearches > 0) {
-			console.log("visions.totalRandomSearches: " + visions.totalRandomSearches);
-			
-			// Store the phrases and IDs in their own arrays. We will update Mongo with this.
-			visions.searchPhrasesArray.push(visions.allSearchPhrasesArray[0].searchTerm);
-			visions.searchIDsArray.push(visions.allSearchPhrasesArray[0].id);
-
-			// Remove the document we just selected. Decrement counter.
-			// _.pullAt(visions.allSearchPhrasesArray, randomPos);
-			visions.allSearchPhrasesArray.shift();
-			visions.totalRandomSearches--;
-		};
-
-		console.log('arrived here');
-
-		cb(null, visions);
-	}
-
-	
-	
-	// var searchPhrasesJSON = {
-	// 	"phrases" : [
-	// 		{ "searchTerm": "abandon", id: "100" },
-	// 		{ "searchTerm": "ability", id: "101" },
-	// 		{ "searchTerm": "about", id: "102" },
-	// 		{ "searchTerm": "above", id: "103" },
-	// 		{ "searchTerm": "absence", id: "104" },
-	// 		{ "searchTerm": "absent", id: "105" },
-	// 		{ "searchTerm": "absolutely", id: "106" },
-	// 		{ "searchTerm": "abuse", id: "107" },
-	// 		{ "searchTerm": "accept", id: "108" },
-	// 		{ "searchTerm": "accident", id: "109" },
-	// 		{ "searchTerm": "according", id: "110" },
-	// 		{ "searchTerm": "accurate", id: "111" },
-	// 		{ "searchTerm": "accuse", id: "112" },
-	// 		{ "searchTerm": "achieve", id: "113" },
-	// 		{ "searchTerm": "achievement", id: "114" },
-	// 		{ "searchTerm": "acquire", id: "115" },
-	// 		{ "searchTerm": "across", id: "116" },
-	// 		{ "searchTerm": "action", id: "117" },
-	// 		{ "searchTerm": "adjust", id: "118" },
-	// 		{ "searchTerm": "admire", id: "119" }
-	// 	]
-	// }; 
-
-
-
+	cb(null, visions);
 }
+
+
+// resetVisions = function(visions) {
+// 	visions.totalRandomSearches = 5;
+// 	visions.tempVisionsArray = [];
+// 	visions.searchPhrasesArray = [];
+// 	visions.searchIDsArray = [];
+// }
+
+
+// ===========================
+// Get Search Phrases
+// ===========================
+retrieveSearchPhrases = function(visions, cb) {
+	console.log('--------------------------- Retrieve search phrases ---------------------------');
+
+	var searchPhrasesJSON = {};
+
+	// Mongo: Query data from searchStrings collection
+	searchStringsDBC.find({ status: "new" }, 
+		function(err, docs) {
+			if (!err) {
+				console.log("Mongo: searchStrings docs retrieved! Total: " + docs.length);
+				searchPhrasesJSON = docs;
+
+				cb(null, visions, searchPhrasesJSON);
+			} else {
+				console.log("Error retrieving data from searchStrings Collection");
+			}
+		}
+	);
+}
+
+
+
+processSearchStrings = function(visions, searchPhrasesJSON, cb) {
+	console.log('--------------------------- Processing search strings ---------------------------');	
+
+	// Convert to array
+	for (var i = 0; i < searchPhrasesJSON.length; i++) {
+		visions.allSearchPhrasesArray.push(searchPhrasesJSON[i]);
+	};
+
+	// Do we have enough? If not, trigger resetAll function.
+	// Insert fake values here to force/test reset.
+	// if (visions.allSearchPhrasesArray.length < visions.totalRandomSearches) {
+	if (visions.allSearchPhrasesArray.length < 1300) {
+		console.log("Not enough left. Time to reset!");
+		resetAllSearchTerms(visions);
+		return;
+	};
+
+	// Randomize the array
+	// Well, not yet. Let's leave it be for now.
+	// visions.allSearchPhrasesArray = _.shuffle(visions.allSearchPhrasesArray);
+
+	// Randomly grab the total number of searches we need.
+	while (visions.totalRandomSearches > 0) {
+		// Store the phrases and IDs in their own arrays. We will update Mongo with this.
+		visions.searchPhrasesArray.push(visions.allSearchPhrasesArray[0].searchTerm);
+		visions.searchIDsArray.push(visions.allSearchPhrasesArray[0]._id);
+
+		// Remove the document we just selected. Decrement counter.
+		visions.allSearchPhrasesArray.shift();
+		visions.totalRandomSearches--;
+	};
+
+	console.log("visions.searchPhrasesArray: " + visions.searchPhrasesArray);
+
+	cb(null, visions);
+}
+
 
 // ===========================
 // Reset All Search Terms
 // ===========================
-resetAllSearchTerms = function() {
+resetAllSearchTerms = function(visions) {
 	console.log('--------------------------- Reset all search terms ---------------------------');
 	// We've exhausted the list!
 	// set all DB documents to status = "new"
 	// Start over and retrieve docs again
+
+	// var searchStringsDBC = db.collection('searchStrings');
+
+	searchStringsDBC.update( 
+		{ _id : { $exists: true } },
+	  	{ $set: { status : "new" } },
+	  	{ multi: true }, function() {
+	  		console.log('Reset completed!');
+			
+			// Start it all over again!
+			searchBegin();
+	  	}
+	);
+
 	console.log('Reset all search terms!');
 }
 
 
 // ===========================
 // Update DB IDs
-// 
 // ===========================
 updateDBIDs = function(visions, cb) {
 	console.log('--------------------------- Update database IDs ---------------------------');
 	// Create JSON, send to MongoDB
 	// update based on IDs in searchStrings Collection, mark status as "used"
 
-	cb(null, visions);
+	// console.log(visions.searchPhrasesArray);
+	// console.log(visions.searchIDsArray);
+	
+	// var searchStringsDBC = db.collection('searchStrings');
+
+	searchStringsDBC.update( 
+		{ _id : { $in: visions.searchIDsArray } },
+	  	{ $set: { status : "used" } },
+	  	{ multi: true }, function() {
+	  		console.log('Updates complete!');
+			cb(null, visions);
+	  	}
+	);
 }
 
 
@@ -258,8 +250,8 @@ scrubResults = function(visions, cb) {
 				var distance = levenshtein.get(visions.tempVisionsArray[i].toLowerCase(), visions.allVisionsArray[j].toLowerCase());
 				// If we find a too-similar match, exit out
 				if (distance < visions.levenshteinThreshold) {
-					console.log("Applicant: " + visions.tempVisionsArray[i]);
-					console.log("Existing: " + visions.allVisionsArray[j]);
+					// console.log("Applicant: " + visions.tempVisionsArray[i]);
+					// console.log("Existing: " + visions.allVisionsArray[j]);
 					isOriginal = false;
 					break; 
 				}
@@ -280,33 +272,160 @@ scrubResults = function(visions, cb) {
 arrayCheckReset = function(visions, cb) {
 	console.log('--------------------------- Array Check/Reset ---------------------------');
 
-	// Is our array too large? 
-	if (visions.allVisionsArray.length < visions.maxArraySize) {
-		if (visions.searchPhrasesArray.length > 0) {
-			// Clear tempVisionsArray.
-			visions.tempVisionsArray = [];
-			getTweets(visions, cb);
-		} else {
-			cb(null, visions);
-		};
-	// It's too large. Let's push content up to our MongoDB.
-	} else {
-		// Upload data to Mongo
-		// Reset vars
+	console.log("Current/Max Visions: " + visions.allVisionsArray.length + "/" + visions.maxArraySize);
 
-		// on success, 
-		// getTweets(visions, cb);
+	// Check if our allVisionsArray is too large
+	// If it is...
+	if (visions.allVisionsArray.length > visions.maxArraySize) {
+		console.log("Too large - send it to the DB!");
+		// Format allVisionsArray content, push to Mongo
+		var mongoVisionsUpdate = [];
+		for (var i = 0; i < visions.allVisionsArray.length; i++) {
+			mongoVisionsUpdate[i] = {};
+			mongoVisionsUpdate[i].tweet = visions.allVisionsArray[i];
+		};
+
+		twitterStorageDBC.insert(mongoVisionsUpdate, function() {
+			// Clear this array, for new visions to populate
+			visions.tempVisionsArray = [];
+			phraseCheckReset(visions, cb);
+		});
+
+	// If it's not too large, continue and check phrase array	
+	} else {
+		phraseCheckReset(visions, cb);
+	} 
+}
+
+
+phraseCheckReset = function(visions, cb) {
+	console.log('--------------------------- Phrase Check/Reset ---------------------------');	
+	// Do we have more phrases to search through? If so...
+	if (visions.searchPhrasesArray.length > 0) {
+		console.log("Go get some more");
+		getTweets(visions, cb);
+
+	// We're done! Push what remains...
+	} else {
+		console.log("All done. Pushing what remains...");
+		// Format allVisionsArray content, push to MongoDB
+		var mongoVisionsUpdate = [];
+		for (var i = 0; i < visions.allVisionsArray.length; i++) {
+			mongoVisionsUpdate[i] = {};
+			mongoVisionsUpdate[i].tweet = visions.allVisionsArray[i];
+		};
+
+		// Upload remaining to MongoDB
+		twitterStorageDBC.insert(mongoVisionsUpdate, function() {
+			cb(null, visions);
+		});
 	}
 }
 
 
-testFunction = function(visions, cb) {
-	console.log('--------------------------- Test Function ---------------------------');
-	
-	for (var i = 0; i < visions.allVisionsArray.length; i++) {
-		console.log(visions.allVisionsArray[i]);
-	};
+getAllFinalTweets = function(visions, cb) {
+	console.log('--------------------------- Get All Final Tweets ---------------------------');	
+
+	var visionsPrepJSON = {};
+
+	// Mongo: Query data from searchStrings collection
+	twitterStorageDBC.find({}, function(err, docs) {
+			if (!err) {
+				console.log("Mongo: All twitterStorageDBC docs retrieved! Total: " + docs.length);
+				visionsPrepJSON = docs;
+
+				cb(null, visions, visionsPrepJSON);
+			} else {
+				console.log("Error retrieving data from twitterStorage Collection");
+			}
+		}
+	);
 }
+
+
+finalPassClean = function(visions, visionsPrepJSON, cb) {
+	console.log('--------------------------- FinalPass Clean ---------------------------');
+	
+	console.log("BEFORE visionsPrepJSON.length: " + visionsPrepJSON.length);
+
+	// Levenshtein it up!
+
+	// for (var i = (visionsPrepJSON.length - 1); i > 0; i--) {
+	// 	for (var j = (visionsPrepJSON.length - 2); j > 0; j--) {
+	// 		var applicant = visionsPrepJSON[i].tweet,
+	// 			existing = visionsPrepJSON[j].tweet;
+
+	// 			console.log("Applicant: " + applicant);
+	// 			console.log("Existing: " + existing);
+
+	// 		var distance = levenshtein.get(applicant.toLowerCase(), existing.toLowerCase());
+
+	// 		if (distance < visions.levenshteinThreshold) {
+	// 			console.log('found one');
+	// 			// console.log("Applicant: " + applicant);
+	// 			// console.log("Existing: " + existing);
+				
+	// 			visionsPrepJSON.splice(i, 1);
+				
+	// 			break; 
+	// 		}
+	// 	}
+	// 	console.log(i);
+	// }
+
+	console.log("AFTER visionsPrepJSON.length: " + visionsPrepJSON.length);
+
+	cb(null, visionsPrepJSON);
+}
+
+
+finalUploadRename = function(visionsPrepJSON, cb) {
+	console.log('--------------------------- Final upload and rename ---------------------------');
+
+	// Remove all documents from twitterStorageDBC
+	twitterStorageDBC.remove({}, function() {
+
+		// Upload remaining to MongoDB
+		twitterStorageDBC.insert(visionsPrepJSON, function() {
+			twitterStorageDBC.renameCollection("twitterVisions", true, function() {
+				cb(null, visions);			
+			})
+		});
+	});
+}
+
+
+
+endOfLine = function(visions, cb) {
+	console.log('--------------------------- End of line ---------------------------');
+	db.close();
+}
+
+
+
+// At Start: empty out Visions Storage Collection
+
+// Store everything in a Visions Storage Collection
+
+// Pull down VS Collection
+// Apply Levenshtein filter
+
+// Upload remaining list to Twitter Visions
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -317,28 +436,26 @@ testFunction = function(visions, cb) {
 // Mongo Testing
 // ===========================
 mongoTest = function() {
-	// Connect to DB
-	var db = mongojs(mongoURI),
-		searchStringsDBC = db.collection('searchStrings'),
-		searchPhrasesJSON = {};
-	
-		searchStringsDBC.find({ status: "new" }).limit(5, 
-			function(err, docs) {
-				if (!err) {
-					console.log("Mongo: searchStrings docs retrieved!");
-					// console.log(JSON.stringify(docs));
-					var bob = docs;
-					console.log(typeof bob);
-					console.log(bob);
+var db = mongojs(mongoURI),
+	searchStringsDBC = db.collection('searchStrings'),
+	twitterStorageDBC = db.collection('twitterVisions');
 
-					db.close();
+	var tarray = ["I am here.", "I am there.", "I am everywhere"];
+	var mongoVisionsUpdate = [];
 
+	console.log(tarray.length);
 
-				} else {
-					console.log("Error retrieving data from searchStrings Collection");
-				}
-			}
-		);
+	for (var i = 0; i < tarray.length; i++) {
+		mongoVisionsUpdate[i] = {};
+		mongoVisionsUpdate[i].tweet = tarray[i];
+	};	
+
+	twitterStorageDBC.insert(mongoVisionsUpdate, function() {
+		console.log('Finished!');
+		db.close();
+	});
+
+	console.log(mongoVisionsUpdate);
 }
 
 
@@ -350,16 +467,19 @@ mongoTest = function() {
 // ===========================
 // Execute
 // ===========================
-run = function() {
+searchBegin = function() {
 	console.log('--------------------------- Starting ---------------------------');
 
     async.waterfall([
+    	augurInit,
 		retrieveSearchPhrases,
+		processSearchStrings,
 		updateDBIDs,
 		getTweets,
 		// scrubResults,
-		testFunction		
-
+		getAllFinalTweets,
+		finalPassClean,
+		endOfLine
     ],
     function(err, botData) {
 		if (err) {
@@ -368,7 +488,9 @@ run = function() {
     });
 }
 
-run();
+
+searchBegin();
+
 
 // mongoTest();
 
