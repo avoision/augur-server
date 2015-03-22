@@ -49,7 +49,7 @@ augurInit = function(cb) {
 	
 	// Consider: searchPhrasesArray, searchIDsArray - unnecessary?
 	var visions = {
-		totalRandomSearches: 30,		// Counter. Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
+		totalRandomSearches: 40,		// Counter. Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
 		maxArraySize: 500,				// When allVisionsArray reaches this size, push to Mongo before clearing/resuming.
 		levenshteinThreshold: 25,		// Levenshtein distance, to avoid similar strings.
 		allVisionsArray: [],			// List of visions, before uploading to Mongo
@@ -104,8 +104,7 @@ processSearchStrings = function(visions, searchPhrasesJSON, cb) {
 	};
 
 	// Randomize the array
-	// Well, not yet. Let's leave it be for now.
-	// visions.allSearchPhrasesArray = _.shuffle(visions.allSearchPhrasesArray);
+	visions.allSearchPhrasesArray = _.shuffle(visions.allSearchPhrasesArray);
 
 	// Randomly grab the total number of searches we need.
 	while (visions.totalRandomSearches > 0) {
@@ -229,7 +228,9 @@ getTweets = function(visions, cb) {
     });
 };
 
-
+// ===========================
+// Scrub Results
+// ===========================
 scrubResults = function(visions, cb) {
 	console.log('--------------------------- Scrub results ---------------------------');
 
@@ -280,7 +281,9 @@ scrubResults = function(visions, cb) {
 	arrayCheckReset(visions, cb);
 }
 
-
+// ===========================
+// Array Check/Reset
+// ===========================
 arrayCheckReset = function(visions, cb) {
 	console.log('--------------------------- Array Check/Reset ---------------------------');
 
@@ -309,7 +312,9 @@ arrayCheckReset = function(visions, cb) {
 	} 
 }
 
-
+// ===========================
+// Phrase Check/Reset
+// ===========================
 phraseCheckReset = function(visions, cb) {
 	console.log('--------------------------- Phrase Check/Reset ---------------------------');	
 	// Do we have more phrases to search through? If so...
@@ -335,7 +340,9 @@ phraseCheckReset = function(visions, cb) {
 	}
 }
 
-
+// ===========================
+// Get All Final Tweets
+// ===========================
 getAllFinalTweets = function(visions, cb) {
 	console.log('--------------------------- Get All Final Tweets ---------------------------');	
 
@@ -355,7 +362,9 @@ getAllFinalTweets = function(visions, cb) {
 	);
 }
 
-
+// ===========================
+// Final Pass/Clean
+// ===========================
 finalPassClean = function(visions, visionsPrepJSON, cb) {
 	console.log('--------------------------- FinalPass Clean ---------------------------');
 	
@@ -394,21 +403,25 @@ finalPassClean = function(visions, visionsPrepJSON, cb) {
 	cb(null, visionsFinal);
 }
 
-
-finalUploadRename = function(visionsFinal, cb) {
+// ===========================
+// Final Upload
+// ===========================
+finalUpload = function(visionsFinal, cb) {
 	console.log('--------------------------- Final upload and rename ---------------------------');
 
-// >>>>> Blank out visionsFinal
-// >>>>> Then replace with...
+	// Blank out the Twitter Visions DB
+	twitterVisionsDBC.remove({}, function() {
 
-	// Upload final visions content to MongoDB
-	twitterVisionsDBC.insert(visionsFinal, function() {
+		// Upload our new set of visions
+		twitterVisionsDBC.insert(visionsFinal, function() {
 
-		// When done, blank out the storage collection
-		twitterStorageDBC.remove({}, function() {
-			cb(null);
+			// When done, blank out the storage collection
+			twitterStorageDBC.remove({}, function() {
+				cb(null);
+			});
 		});
-	});
+
+	})
 }
 
 
@@ -417,69 +430,6 @@ endOfLine = function(visions, cb) {
 	console.log('--------------------------- End of line ---------------------------');
 	db.close();
 }
-
-
-
-// At Start: empty out Visions Storage Collection
-
-// Store everything in a Visions Storage Collection
-
-// Pull down VS Collection
-// Apply Levenshtein filter
-
-// Upload remaining list to Twitter Visions
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ===========================
-// Mongo Testing
-// ===========================
-mongoTest = function() {
-var db = mongojs(mongoURI),
-	searchStringsDBC = db.collection('searchStrings'),
-	twitterStorageDBC = db.collection('twitterVisions');
-
-	var tarray = ["I am here.", "I am there.", "I am everywhere"];
-	var mongoVisionsUpdate = [];
-
-	console.log(tarray.length);
-
-	for (var i = 0; i < tarray.length; i++) {
-		mongoVisionsUpdate[i] = {};
-		mongoVisionsUpdate[i].tweet = tarray[i];
-	};	
-
-	twitterStorageDBC.insert(mongoVisionsUpdate, function() {
-		console.log('Finished!');
-		db.close();
-	});
-
-	console.log(mongoVisionsUpdate);
-}
-
-
-
-
-
-
 
 // ===========================
 // Execute
@@ -493,10 +443,12 @@ searchBegin = function() {
 		processSearchStrings,
 		updateDBIDs,
 		getTweets,
-		// scrubResults,
+		// scrubResults > 
+		// arrayCheckReset > 
+		// phraseCheckReset > 
 		getAllFinalTweets,
 		finalPassClean,
-		finalUploadRename,
+		finalUpload,
 		endOfLine
     ],
     function(err, botData) {
@@ -506,11 +458,7 @@ searchBegin = function() {
     });
 }
 
-
 searchBegin();
-
-
-// mongoTest();
 
 
 
