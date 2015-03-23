@@ -4,6 +4,7 @@ var async         	= require('async');
 var mongojs 		= require('mongojs');
 var wordfilter    	= require('wordfilter');
 var levenshtein 	= require('fast-levenshtein');
+var AWS 			= require('aws-sdk');
 
 var t = new Twit({
     consumer_key:         	process.env.AUGURAPP_TWIT_CONSUMER_KEY,
@@ -11,6 +12,11 @@ var t = new Twit({
     access_token:         	process.env.AUGURAPP_TWIT_ACCESS_TOKEN,
     access_token_secret:  	process.env.AUGURAPP_TWIT_ACCESS_TOKEN_SECRET
 });
+
+AWS.config.accessKeyId = process.env.AUGURAPP_AWS_KEY;
+AWS.config.secretAccessKey = process.env.AUGURAPP_AWS_SECRET;
+
+var s3 = new AWS.S3();
 
 var mongoUser = process.env.AUGURAPP_MONGODB_USER,
 	mongoPass = process.env.AUGURAPP_MONGODB_PASS,
@@ -49,7 +55,7 @@ augurInit = function(cb) {
 	
 	// Consider: searchPhrasesArray, searchIDsArray - unnecessary?
 	var visions = {
-		totalRandomSearches: 40,		// Counter. Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
+		totalRandomSearches: 15,		// Counter. Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
 		maxArraySize: 500,				// When allVisionsArray reaches this size, push to Mongo before clearing/resuming.
 		levenshteinThreshold: 25,		// Levenshtein distance, to avoid similar strings.
 		allVisionsArray: [],			// List of visions, before uploading to Mongo
@@ -301,8 +307,9 @@ arrayCheckReset = function(visions, cb) {
 		};
 
 		twitterStorageDBC.insert(mongoVisionsUpdate, function() {
-			// Clear this array, for new visions to populate
+			// Clear these arrays, for new visions to populate
 			visions.tempVisionsArray = [];
+			visions.allVisionsArray = [];
 			phraseCheckReset(visions, cb);
 		});
 
@@ -409,19 +416,46 @@ finalPassClean = function(visions, visionsPrepJSON, cb) {
 finalUpload = function(visionsFinal, cb) {
 	console.log('--------------------------- Final upload and rename ---------------------------');
 
-	// Blank out the Twitter Visions DB
-	twitterVisionsDBC.remove({}, function() {
+	var params = {
+		Bucket: 'avoision-augur', /* required */
+		Key: 'visions.json', /* required */
+		ACL: 'public-read',
+		Body: JSON.stringify(visionsFinal), //  || 'STRING_VALUE' || streamObject,
+		ContentType: 'application/javascript',
+	};
 
-		// Upload our new set of visions
-		twitterVisionsDBC.insert(visionsFinal, function() {
-
+	s3.putObject(params, function(err, data) {
+  		if (!err) {
+			
 			// When done, blank out the storage collection
 			twitterStorageDBC.remove({}, function() {
 				cb(null);
 			});
-		});
 
-	})
+  		} else {
+  			console.log(err, err.stack); // an error occurred
+  		}
+	});
+
+	// Create new object to contain visionsFinal?
+	// Create new file
+	// Upload new file to S3
+	// Blank out storage collection.
+
+
+	// // Blank out the Twitter Visions DB
+	// twitterVisionsDBC.remove({}, function() {
+
+	// 	// Upload our new set of visions
+	// 	twitterVisionsDBC.insert(visionsFinal, function() {
+
+	// 		// When done, blank out the storage collection
+	// 		twitterStorageDBC.remove({}, function() {
+	// 			cb(null);
+	// 		});
+	// 	});
+
+	// })
 }
 
 
@@ -451,15 +485,58 @@ searchBegin = function() {
 		finalUpload,
 		endOfLine
     ],
-    function(err, botData) {
+    function(err) {
 		if (err) {
 			console.log('Run Error: ', err);
 		}
     });
 }
 
+
+// ===========================
+// Test
+// ===========================
+// tester = function() {
+// 	var visionsData = [
+// 		{
+// 		    "_id": {
+// 		        "$oid": "550f7d51f30ea2c85c779baa"
+// 		    },
+// 		    "tweet": "As You Move Foward In Life, You May Need To Change Your Circle Of Friends. Everyone Around You Isn't Interested In Seeing You Improve."
+// 		},
+// 		{
+// 		    "_id": {
+// 		        "$oid": "550f7d51f30ea2c85c779bab"
+// 		    },
+// 		    "tweet": "Avanade posted a job you might be interested in: Group Manager, Security Operations - Greater Seattle Area, US."
+// 		},
+// 		{
+// 		    "_id": {
+// 		        "$oid": "550f7d51f30ea2c85c779bac"
+// 		    },
+// 		    "tweet": "EY posted a job you might be interested in: Associate Director/Director, Business Modelling, Sydney - Sydney Area, Australia, AU."
+// 		}
+// 	];
+
+// 	var params = {
+// 		Bucket: 'avoision-augur', /* required */
+// 		Key: 'visions.json', /* required */
+// 		ACL: 'public-read',
+// 		Body: JSON.stringify(visionsData), //  || 'STRING_VALUE' || streamObject,
+// 		ContentType: 'application/javascript',
+// 	};
+
+// 	s3.putObject(params, function(err, data) {
+//   		if (err) console.log(err, err.stack); // an error occurred
+//   		else     console.log(data);           // successful response
+// 	});
+// }
+
+
+
 searchBegin();
 
+// tester();
 
 
 
