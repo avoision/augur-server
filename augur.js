@@ -55,7 +55,7 @@ augurInit = function(cb) {
 	
 	// Consider: searchPhrasesArray, searchIDsArray - unnecessary?
 	var visions = {
-		totalRandomSearches: 15,		// Counter. Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
+		totalRandomSearches: 150,		// Counter. Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
 		maxArraySize: 500,				// When allVisionsArray reaches this size, push to Mongo before clearing/resuming.
 		levenshteinThreshold: 25,		// Levenshtein distance, to avoid similar strings.
 		allVisionsArray: [],			// List of visions, before uploading to Mongo
@@ -492,71 +492,11 @@ searchBegin = function() {
     });
 }
 
-
-// ===========================
-// Test
-// ===========================
-// tester = function() {
-// 	var visionsData = [
-// 		{
-// 		    "_id": {
-// 		        "$oid": "550f7d51f30ea2c85c779baa"
-// 		    },
-// 		    "tweet": "As You Move Foward In Life, You May Need To Change Your Circle Of Friends. Everyone Around You Isn't Interested In Seeing You Improve."
-// 		},
-// 		{
-// 		    "_id": {
-// 		        "$oid": "550f7d51f30ea2c85c779bab"
-// 		    },
-// 		    "tweet": "Avanade posted a job you might be interested in: Group Manager, Security Operations - Greater Seattle Area, US."
-// 		},
-// 		{
-// 		    "_id": {
-// 		        "$oid": "550f7d51f30ea2c85c779bac"
-// 		    },
-// 		    "tweet": "EY posted a job you might be interested in: Associate Director/Director, Business Modelling, Sydney - Sydney Area, Australia, AU."
-// 		}
-// 	];
-
-// 	var params = {
-// 		Bucket: 'avoision-augur', /* required */
-// 		Key: 'visions.json', /* required */
-// 		ACL: 'public-read',
-// 		Body: JSON.stringify(visionsData), //  || 'STRING_VALUE' || streamObject,
-// 		ContentType: 'application/javascript',
-// 	};
-
-// 	s3.putObject(params, function(err, data) {
-//   		if (err) console.log(err, err.stack); // an error occurred
-//   		else     console.log(data);           // successful response
-// 	});
-// }
-
-
-
-searchBegin();
-
-// tester();
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+setInterval(function() {
+  try {
+	searchBegin();
+  }
+  catch (e) {
+    console.log(e);
+  }
+}, 60000 * 15);
