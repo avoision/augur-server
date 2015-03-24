@@ -55,7 +55,7 @@ augurInit = function(cb) {
 	
 	// Consider: searchPhrasesArray, searchIDsArray - unnecessary?
 	var visions = {
-		totalRandomSearches: 10,		// Counter. Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
+		totalRandomSearches: 179,		// Counter. Keep polling Twitter for X number of search phrases. Low for testing, should be ~180
 		maxArraySize: 500,				// When allVisionsArray reaches this size, push to Mongo before clearing/resuming.
 		levenshteinThreshold: 25,		// Levenshtein distance, to avoid similar strings.
 		allVisionsArray: [],			// List of visions, before uploading to Mongo
@@ -429,6 +429,7 @@ finalUpload = function(visionsFinal, cb) {
 			
 			// When done, blank out the storage collection
 			twitterStorageDBC.remove({}, function() {
+				
 				cb(null);
 			});
 
@@ -460,9 +461,8 @@ finalUpload = function(visionsFinal, cb) {
 
 
 
-endOfLine = function(visions, cb) {
+endOfLine = function(cb) {
 	console.log('--------------------------- End of line ---------------------------');
-	db.close();
 }
 
 // ===========================
@@ -493,10 +493,10 @@ searchBegin = function() {
 }
 
 setInterval(function() {
-  try {
-	searchBegin();
-  }
-  catch (e) {
-    console.log(e);
-  }
-}, 60000 * 3);
+	try {
+		searchBegin();
+	}
+	catch (e) {
+		console.log(e);
+	}
+}, 60000 * 15);
