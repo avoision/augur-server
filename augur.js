@@ -72,7 +72,7 @@ augurInit = function(cb) {
 // Get Search Phrases
 // ===========================
 retrieveSearchPhrases = function(visions, cb) {
-	console.log('--------------------------- Retrieve search phrases ---------------------------');
+	// console.log('--------------------------- Retrieve search phrases ---------------------------');
 
 	var searchPhrasesJSON = {};
 
@@ -80,12 +80,12 @@ retrieveSearchPhrases = function(visions, cb) {
 	searchStringsDBC.find({ status: "new" }, 
 		function(err, docs) {
 			if (!err) {
-				console.log("Mongo: searchStrings docs retrieved! Total: " + docs.length);
+				// console.log("Mongo: searchStrings docs retrieved! Total: " + docs.length);
 				searchPhrasesJSON = docs;
 
 				cb(null, visions, searchPhrasesJSON);
 			} else {
-				console.log("Error retrieving data from searchStrings Collection");
+				// console.log("Error retrieving data from searchStrings Collection");
 			}
 		}
 	);
@@ -94,7 +94,7 @@ retrieveSearchPhrases = function(visions, cb) {
 
 
 processSearchStrings = function(visions, searchPhrasesJSON, cb) {
-	console.log('--------------------------- Processing search strings ---------------------------');	
+	// console.log('--------------------------- Processing search strings ---------------------------');	
 
 	// Convert to array
 	for (var i = 0; i < searchPhrasesJSON.length; i++) {
@@ -104,7 +104,7 @@ processSearchStrings = function(visions, searchPhrasesJSON, cb) {
 	// Do we have enough? If not, trigger resetAll function.
 	// Insert fake values here to force/test reset.
 	if (visions.allSearchPhrasesArray.length < visions.totalRandomSearches) {
-		console.log("Not enough left. Time to reset!");
+		// console.log("Not enough left. Time to reset!");
 		resetAllSearchTerms(visions);
 		return;
 	};
@@ -123,7 +123,7 @@ processSearchStrings = function(visions, searchPhrasesJSON, cb) {
 		visions.totalRandomSearches--;
 	};
 
-	console.log("visions.searchPhrasesArray: " + visions.searchPhrasesArray);
+	// console.log("visions.searchPhrasesArray: " + visions.searchPhrasesArray);
 
 	cb(null, visions);
 }
@@ -133,7 +133,7 @@ processSearchStrings = function(visions, searchPhrasesJSON, cb) {
 // Reset All Search Terms
 // ===========================
 resetAllSearchTerms = function(visions) {
-	console.log('--------------------------- Reset all search terms ---------------------------');
+	// console.log('--------------------------- Reset all search terms ---------------------------');
 	// We've exhausted the list!
 	// set all DB documents to status = "new"
 	// Start over and retrieve docs again
@@ -144,14 +144,14 @@ resetAllSearchTerms = function(visions) {
 		{ _id : { $exists: true } },
 	  	{ $set: { status : "new" } },
 	  	{ multi: true }, function() {
-	  		console.log('Reset completed!');
+	  		// console.log('Reset completed!');
 			
 			// Start it all over again!
 			searchBegin();
 	  	}
 	);
 
-	console.log('Reset all search terms!');
+	// console.log('Reset all search terms!');
 }
 
 
@@ -159,12 +159,12 @@ resetAllSearchTerms = function(visions) {
 // Update DB IDs
 // ===========================
 updateDBIDs = function(visions, cb) {
-	console.log('--------------------------- Update database IDs ---------------------------');
+	// console.log('--------------------------- Update database IDs ---------------------------');
 	// Create JSON, send to MongoDB
 	// update based on IDs in searchStrings Collection, mark status as "used"
 
-	// console.log(visions.searchPhrasesArray);
-	// console.log(visions.searchIDsArray);
+	// // console.log(visions.searchPhrasesArray);
+	// // console.log(visions.searchIDsArray);
 	
 	// var searchStringsDBC = db.collection('searchStrings');
 
@@ -172,7 +172,7 @@ updateDBIDs = function(visions, cb) {
 		{ _id : { $in: visions.searchIDsArray } },
 	  	{ $set: { status : "used" } },
 	  	{ multi: true }, function() {
-	  		console.log('Updates complete!');
+	  		// console.log('Updates complete!');
 			cb(null, visions);
 	  	}
 	);
@@ -183,13 +183,13 @@ updateDBIDs = function(visions, cb) {
 // Twitter Search
 // ===========================
 getTweets = function(visions, cb) {
-	console.log('--------------------------- Get tweets ---------------------------');
+	// console.log('--------------------------- Get tweets ---------------------------');
 
 	// Grab first tweet from visions.searchPhrasesArray
 	var currentWord = visions.searchPhrasesArray[0],
 		urlEncodedPhrase = visions.searchPhrasesArray[0] + "%20AND%20";
 
-	console.log("currentWord: " + currentWord);
+	// console.log("currentWord: " + currentWord);
 
 	// Add in additional 2nd/3rd person POV phrases, forward looking. No RTs.
 	// urlEncodedPhrase = '%22you%20will%22%20OR%20you%27ll%20OR%20he%27ll%20OR%20she%27ll%20OR%20they%27ll%20AND%20' + urlEncodedPhrase + '-RT';
@@ -238,9 +238,9 @@ getTweets = function(visions, cb) {
 // Scrub Results
 // ===========================
 scrubResults = function(visions, cb) {
-	console.log('--------------------------- Scrub results ---------------------------');
+	// console.log('--------------------------- Scrub results ---------------------------');
 
-	console.log("Before: " + visions.tempVisionsArray.length);
+	// console.log("Before: " + visions.tempVisionsArray.length);
 
 	var rejectionCriteriaArray = ['@', 'http', '#', '&', 'U+', 'i ', 'im ', 'i\'m', 'i\'ve ', 'ive ', 'i\'ll ', '. ill ', 'i\'d ', 'i\'da ', 'ida ', 'me ', 'my ', 'mine ', 'me', 'mine', 'lmao', 'lmfao', 'omg', 'omfg', 'smh', '&#', '%', ':)', ';)', ':p', 'oh:', 'tweet', 'we', 'we\'ll'];
 
@@ -251,14 +251,14 @@ scrubResults = function(visions, cb) {
 			n = n.replace('\\\'', '\'');
 			if (n.toLowerCase().indexOf(rejectionCriteriaArray[i]) > -1) {
 				return true;
-				console.log(n);
+				// console.log(n);
 				break;
 			};
 
 		}
 	});
 
-	console.log("After: " + visions.tempVisionsArray.length);
+	// console.log("After: " + visions.tempVisionsArray.length);
 
 	// Iterate through temp array
 	for (var i = 0; i < visions.tempVisionsArray.length; i++) {
@@ -269,8 +269,8 @@ scrubResults = function(visions, cb) {
 				var distance = levenshtein.get(visions.tempVisionsArray[i].toLowerCase(), visions.allVisionsArray[j].toLowerCase());
 				// If we find a too-similar match, exit out
 				if (distance < visions.levenshteinThreshold) {
-					// console.log("Applicant: " + visions.tempVisionsArray[i]);
-					// console.log("Existing: " + visions.allVisionsArray[j]);
+					// // console.log("Applicant: " + visions.tempVisionsArray[i]);
+					// // console.log("Existing: " + visions.allVisionsArray[j]);
 					isOriginal = false;
 					break; 
 				}
@@ -291,14 +291,14 @@ scrubResults = function(visions, cb) {
 // Array Check/Reset
 // ===========================
 arrayCheckReset = function(visions, cb) {
-	console.log('--------------------------- Array Check/Reset ---------------------------');
+	// console.log('--------------------------- Array Check/Reset ---------------------------');
 
-	console.log("Current/Max Visions: " + visions.allVisionsArray.length + "/" + visions.maxArraySize);
+	// console.log("Current/Max Visions: " + visions.allVisionsArray.length + "/" + visions.maxArraySize);
 
 	// Check if our allVisionsArray is too large
 	// If it is...
 	if (visions.allVisionsArray.length > visions.maxArraySize) {
-		console.log("Too large - send it to the DB!");
+		// console.log("Too large - send it to the DB!");
 		// Format allVisionsArray content, push to Mongo
 		var mongoVisionsUpdate = [];
 		for (var i = 0; i < visions.allVisionsArray.length; i++) {
@@ -323,16 +323,16 @@ arrayCheckReset = function(visions, cb) {
 // Phrase Check/Reset
 // ===========================
 phraseCheckReset = function(visions, cb) {
-	console.log('--------------------------- Phrase Check/Reset ---------------------------');	
+	// console.log('--------------------------- Phrase Check/Reset ---------------------------');	
 	// Do we have more phrases to search through? If so...
 	if (visions.searchPhrasesArray.length > 0) {
-		console.log("Go get some more");
+		// console.log("Go get some more");
 		visions.tempVisionsArray = [];
 		getTweets(visions, cb);
 
 	// We're done! Push what remains...
 	} else {
-		console.log("All done. Pushing what remains...");
+		// console.log("All done. Pushing what remains...");
 		// Format allVisionsArray content, push to MongoDB
 		var mongoVisionsUpdate = [];
 		for (var i = 0; i < visions.allVisionsArray.length; i++) {
@@ -351,19 +351,19 @@ phraseCheckReset = function(visions, cb) {
 // Get All Final Tweets
 // ===========================
 getAllFinalTweets = function(visions, cb) {
-	console.log('--------------------------- Get All Final Tweets ---------------------------');	
+	// console.log('--------------------------- Get All Final Tweets ---------------------------');	
 
 	var visionsPrepJSON = {};
 
 	// Mongo: Query data from searchStrings collection
 	twitterStorageDBC.find({}, function(err, docs) {
 			if (!err) {
-				console.log("Mongo: All twitterStorageDBC docs retrieved! Total: " + docs.length);
+				// console.log("Mongo: All twitterStorageDBC docs retrieved! Total: " + docs.length);
 				visionsPrepJSON = docs;
 
 				cb(null, visions, visionsPrepJSON);
 			} else {
-				console.log("Error retrieving data from twitterStorage Collection");
+				// console.log("Error retrieving data from twitterStorage Collection");
 			}
 		}
 	);
@@ -373,9 +373,9 @@ getAllFinalTweets = function(visions, cb) {
 // Final Pass/Clean
 // ===========================
 finalPassClean = function(visions, visionsPrepJSON, cb) {
-	console.log('--------------------------- FinalPass Clean ---------------------------');
+	// console.log('--------------------------- FinalPass Clean ---------------------------');
 	
-	console.log("BEFORE, Prep: " + visionsPrepJSON.length);
+	// console.log("BEFORE, Prep: " + visionsPrepJSON.length);
 
 	// Levenshtein it up!
 	var visionsFinal = [];
@@ -389,8 +389,8 @@ finalPassClean = function(visions, visionsPrepJSON, cb) {
 
 				// If we find a too-similar match, exit out
 				if (distance < visions.levenshteinThreshold) {
-					console.log("Applicant: " + visionsPrepJSON[i].tweet);
-					console.log("Existing: " + visionsFinal[j].tweet);
+					// console.log("Applicant: " + visionsPrepJSON[i].tweet);
+					// console.log("Existing: " + visionsFinal[j].tweet);
 					isOriginal = false;
 					break; 
 				}
@@ -405,8 +405,8 @@ finalPassClean = function(visions, visionsPrepJSON, cb) {
 		}
 	}
 
-	console.log("AFTER, Final: " + visionsFinal.length);
-
+	// console.log("AFTER, Final: " + visionsFinal.length);
+	console.log("Final count: " + visionsFinal.length);
 	cb(null, visionsFinal);
 }
 
@@ -414,7 +414,7 @@ finalPassClean = function(visions, visionsPrepJSON, cb) {
 // Final Upload
 // ===========================
 finalUpload = function(visionsFinal, cb) {
-	console.log('--------------------------- Final upload and rename ---------------------------');
+	// console.log('--------------------------- Final upload and rename ---------------------------');
 
 	var params = {
 		Bucket: 'avoision-augur', /* required */
@@ -434,7 +434,7 @@ finalUpload = function(visionsFinal, cb) {
 			});
 
   		} else {
-  			console.log(err, err.stack); // an error occurred
+  			// console.log(err, err.stack); // an error occurred
   		}
 	});
 
@@ -462,14 +462,14 @@ finalUpload = function(visionsFinal, cb) {
 
 
 endOfLine = function(cb) {
-	console.log('--------------------------- End of line ---------------------------');
+	// console.log('--------------------------- End of line ---------------------------');
 }
 
 // ===========================
 // Execute
 // ===========================
 searchBegin = function() {
-	console.log('--------------------------- Starting ---------------------------');
+	// console.log('--------------------------- Starting ---------------------------');
 
     async.waterfall([
     	augurInit,
@@ -487,7 +487,7 @@ searchBegin = function() {
     ],
     function(err) {
 		if (err) {
-			console.log('Run Error: ', err);
+			// console.log('Run Error: ', err);
 		}
     });
 }
@@ -497,6 +497,6 @@ setInterval(function() {
 		searchBegin();
 	}
 	catch (e) {
-		console.log(e);
+		// console.log(e);
 	}
 }, 60000 * 15);
